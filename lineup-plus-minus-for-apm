@@ -277,9 +277,11 @@ for i in range(len(end_pm['Total Players'])):
     end_pm['Minutes'].iloc[i] = str(minutes)[2:]
     end_pm['Plus Minus'].iloc[i] = plus_minus
     min_sec = end_pm['Minutes'].iloc[i].split(':')
-    end_pm['Seconds Played'].iloc[i] = (int(min_sec[0]) * 60) + int(min_sec[1])
+    end_pm['Seconds Played'].iloc[i] = (float(min_sec[0]) * 60.0) + float(min_sec[1])
 
 end_pm = end_pm[end_pm['Minutes'] != '00:00']
-end_pm['Plus Minus Per Minute'] = (end_pm['Plus Minus'] / end_pm['Seconds Played']) * 60
+end_pm['Plus Minus Per Minute'] = (end_pm['Plus Minus'].astype(float) / end_pm['Seconds Played']) * 60.0
+end_pm['Plus Minus Per Minute'] = end_pm['Plus Minus Per Minute'].astype(float)
+end_pm['Plus Minus'] = end_pm['Plus Minus'].astype(int)
 end_pm = end_pm.sort_values(['Plus Minus', 'Minutes'], ascending = False)
-end_pm.to_csv(opp + ' Lineup Plus Minus.csv', columns = ['Lineup', 'Minutes', 'Plus Minus', 'Plus Minus Per Minute', 'Opp Lineup'], index = False)
+end_pm.to_csv(opp + ' Lineup Plus Minus.csv', columns = ['Lineup', 'Minutes', 'Plus Minus', 'Plus Minus Per Minute', 'Opp Lineup'], index = False, float_format = '%.2f')
