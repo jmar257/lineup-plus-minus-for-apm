@@ -254,7 +254,7 @@ pm = pd.concat((half_1_pm, half_2_pm), ignore_index = True)
 unique_lineups = np.unique(pm['Lineup'])
 unique_opp_lineups = np.unique(pm['Opp Lineup'])
 unique_total_players = np.unique(pm['Total Players'])
-end_cols = ['Lineup', 'Minutes', 'Plus Minus', 'Opp Lineup', 'Total Players']
+end_cols = ['Lineup', 'Minutes', 'Plus Minus', 'Plus Minus Per Minute', 'Opp Lineup', 'Total Players', 'Seconds Played']
 end_pm = pd.DataFrame(columns = end_cols, index = range(0, len(unique_total_players)))
 
 #end_pm['Lineup'] = unique_lineups
@@ -276,7 +276,10 @@ for i in range(len(end_pm['Total Players'])):
     end_pm['Opp Lineup'].iloc[i] = ', '.join(end_pm['Opp Lineup'].iloc[i])
     end_pm['Minutes'].iloc[i] = str(minutes)[2:]
     end_pm['Plus Minus'].iloc[i] = plus_minus
+    min_sec = end_pm['Minutes'].iloc[i].split(':')
+    end_pm['Seconds Played'].iloc[i] = (int(min_sec[0]) * 60) + int(min_sec[1])
 
 end_pm = end_pm[end_pm['Minutes'] != '00:00']
+end_pm['Plus Minus Per Minute'] = (end_pm['Plus Minus'] / end_pm['Seconds Played']) * 60
 end_pm = end_pm.sort_values(['Plus Minus', 'Minutes'], ascending = False)
-end_pm.to_csv(opp + ' Lineup Plus Minus.csv', columns = ['Lineup', 'Minutes', 'Plus Minus', 'Opp Lineup'], index = False)
+end_pm.to_csv(opp + ' Lineup Plus Minus.csv', columns = ['Lineup', 'Minutes', 'Plus Minus', 'Plus Minus Per Minute', 'Opp Lineup'], index = False)
