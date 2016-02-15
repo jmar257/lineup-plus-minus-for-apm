@@ -1,0 +1,282 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Jan 27 11:53:30 2016
+
+@author: John
+"""
+
+import pandas as pd, numpy as np, re
+from time import strptime, strftime
+from datetime import datetime, timedelta
+
+opp = 'Texas A&M'
+#input starters
+starters = ['HORNSBY', 'QUARTERMAN', 'BLAKENEY', 'SIMMONS', 'VICTOR']
+opp_starters = ['COLLINS', 'CARUSO', 'HOUSE', 'DAVIS', 'TROCHA-MORELOS']
+
+def remove_suffixes(string):
+    if string.find('III')>-1:
+        startofsuffix=re.search('III', string).start()-1
+        endofsuffix=re.search('III', string).end()
+        string=string[:startofsuffix]+string[endofsuffix:]
+    if string.find('II')>-1:
+        startofsuffix=re.search('II', string).start()-1
+        endofsuffix=re.search('II', string).end()
+        string=string[:startofsuffix]+string[endofsuffix:]
+    if string.find('IV')>-1:
+        startofsuffix=re.search('IV', string).start()-1
+        endofsuffix=re.search('IV', string).end()
+        string=string[:startofsuffix]+string[endofsuffix:]
+    #commented out because there were no 'V' suffixes and it messed with Victor's last name
+    #if string.find('V')>-1:
+        #startofsuffix=re.search('V', string).start()-1
+        #endofsuffix=re.search('V', string).end()
+        #string=string[:startofsuffix]+string[endofsuffix:]
+    if string.find('JR')>-1:
+        startofsuffix=re.search('JR', string).start()-1
+        endofsuffix=re.search('JR', string).end()
+        string=string[:startofsuffix]+string[endofsuffix:]
+    if string.find('JR.')>-1:
+        startofsuffix=re.search('JR.', string).start()-1
+        endofsuffix=re.search('JR.', string).end()
+        string=string[:startofsuffix]+string[endofsuffix:]
+    return string
+
+def get_opp_roster(game):
+    opp_roster = ['',]
+    for tup in game.itertuples():
+        try:
+            if 'TIMEOUT' in tup[1].split(): continue
+            if 'TIMEOUT-' in tup[1].split(): continue
+            if 'TEAM' in tup[1].split(): continue
+            opp_play = remove_suffixes(tup[1])
+            opp_roster.append(opp_play.split()[-1])
+        except:
+            pass
+
+    opp_roster.remove(opp_roster[0])
+    opp_roster = set(opp_roster)
+    return(list(opp_roster))
+
+def get_plus_minus(pbp, starters, opp_starters):
+    players_on_floor = starters + opp_starters
+    total_players_on_floor = [players_on_floor,]
+    #half_1['Time']=pd.to_datetime(half_1['Time'])
+    pbp['Score'][0] = '0-0'
+    scores_full = pbp['Score'].tolist()
+    for i in range(0, len(scores_full)):
+        if scores_full[i] == '-' or scores_full[i] == 'Score':
+            scores_full[i] = scores_full[i-1]
+    scores_full = np.array(scores_full)
+    pbp['Score'] = scores_full
+
+    scores = []
+    opp_score_all = []
+    lsu_score_all = []
+    for line in pbp['Score']:
+        if line == '-': continue
+        s = str(line)
+        if s[-3:]  in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']:
+                s = s[::-1]
+                opp = s[:3]
+                try:
+                    int(s[-2:-1])
+                    lsu = s[-2:]
+                except:
+                    lsu = s[-1:]
+                s = opp[::-1] + '-' + lsu[::-1]
+        scores.append(s.split('-'))
+
+    opp_score_mon, lsu_score_all= zip(*scores)
+
+    for mon in opp_score_mon:
+        try:
+            opp_score_all.append(strptime(mon,'%b').tm_mon)
+        except:
+            opp_score_all.append(int(mon))
+
+    pbp.insert(4, 'Opp Score', opp_score_all)
+    pbp.insert(5, 'LSU Score', lsu_score_all)
+    pbp.drop('Score', inplace=True, axis=1)
+
+    lineup = list(starters)
+    opp_lineup = list(opp_starters)
+    lineups = [lineup,]
+    opp_lineups = [opp_starters,]
+    subins = []
+    subouts = []
+    opp_subins = []
+    opp_subouts = []
+    lsu_score = [0,]
+    lsu_check_in = ['20:00',]
+    opp_check_in = ['20:00',]
+    lsu_check_out = ['20:00',]
+    opp_check_out = ['20:00',]
+    opp_score = [0,]
+    #opp_check_in = []
+    #opp_check_out = []
+    plus_minus = [0,]
+
+    opp_roster = get_opp_roster(half_1)
+
+    for tup in pbp.itertuples():
+        if tup[2] == 'Time':
+            lineup = starters[:]
+            opp_lineup = opp_starters[:]
+            lsu_check_in.append('20:00')
+            lsu_check_out.append('0:00')
+            continue
+        lsu_play = str(tup[6])
+        opp_play = str(tup[1])
+        if ' SUB ' not in lsu_play and ' SUB ' not in opp_play:
+            continue
+        lsu_play = remove_suffixes(lsu_play)
+        opp_play = remove_suffixes(opp_play)
+        if ' SUB IN ' in lsu_play:
+            player = lsu_play.split()[-1]
+            if tup[2] != lsu_check_in[-1]:
+                subins = []
+            subins.append(player)
+        if ' SUB IN ' in opp_play:
+            opp_player = opp_play.split()[-1]
+            if tup[2] != opp_check_in[-1]:
+                opp_subins = []
+            opp_subins.append(opp_player)
+        if ' SUB OUT ' in lsu_play:
+            player = lsu_play.split()[-1]
+            if tup[2] != lsu_check_out[-1]:
+                subouts = []
+            subouts.append(player)
+        if ' SUB OUT ' in opp_play:
+            opp_player = opp_play.split()[-1]
+            if tup[2] != opp_check_out[-1]:
+                opp_subouts = []
+            opp_subouts.append(opp_player)
+        if subins:
+            for player in subins:
+                if player not in lineup:
+                    lineup.append(player)
+            subins = []
+        if opp_subins:
+            for opp_player in opp_subins:
+                if opp_player not in opp_lineup:
+                    opp_lineup.append(opp_player)
+            opp_subins = []
+        if subouts:
+            for player in subouts:
+                lineup.remove(player)
+            subouts = []
+        if opp_subouts:
+            for opp_player in opp_subouts:
+                opp_lineup.remove(opp_player)
+            opp_subouts = []
+        lineup.sort()
+        opp_lineup.sort()
+        if len(lineup) == 5 and len(opp_lineup) == 5:
+            lineups.append(lineup[:])
+            opp_score.append(int(tup[4]))
+            lsu_score.append(int(tup[5]))
+            lsu_check_out.append(tup[2])
+            lsu_check_in.append(tup[2])
+            opp_lineups.append(opp_lineup[:])
+            opp_check_out.append(tup[2])
+            opp_check_in.append(tup[2])
+            total_players_on_floor.append(lineup[:]+opp_lineup[:])
+#        if len(opp_lineup) == 5:
+#            opp_lineups.append(opp_lineup[:])
+#            opp_check_out.append(tup[2])
+#            opp_check_in.append(tup[2])
+#        if len(lineup) == 5 and len(opp_lineup) == 5:
+#            total_players_on_floor.append(lineup+opp_lineup)
+
+    lsu_score.append(int(pbp['LSU Score'].iloc[-1]))
+    opp_score.append(int(pbp['Opp Score'].iloc[-1]))
+
+    for i in range(1, len(lsu_score)):
+        lsu_diff = lsu_score[i] - lsu_score[i-1]
+        opp_diff = opp_score[i] - opp_score[i-1]
+        pm = lsu_diff - opp_diff
+        #np.append(plus_minus, pm)
+        plus_minus.append(pm)
+
+    plus_minus.remove(plus_minus[0])
+    lsu_check_out.remove(lsu_check_out[0])
+    lsu_check_out.append('0:00')
+    #lineups = np.array(lineups)
+    #plus_minus = np.empty(len(lineups))
+    #plus_minus.fill(np.nan)
+    minutes = []
+    fmt = '%M:%S'
+    for i in range(0, len(lsu_check_in)):
+        stint = datetime.strptime(lsu_check_in[i], fmt) - datetime.strptime(lsu_check_out[i], fmt)
+        stint = str(stint)
+        minutes.append(stint)
+    #opp_lineups = np.array(opp_lineups)
+    lsu_score = np.array(lsu_score)
+    lsu_check_in = np.array(lsu_check_in)
+    lsu_check_out = np.array(lsu_check_out)
+    opp_score = np.array(opp_score)
+    lsu_score = lsu_score.astype(int)
+    opp_score = opp_score.astype(int)
+    plus_minus = np.array(plus_minus)
+    minutes = np.array(minutes)
+    #total_players_on_floor = np.array(total_players_on_floor)
+
+    cols = np.array(['Lineup', 'Minutes', 'Plus/Minus', 'LSU Check In', 'LSU Check Out', 'Opp Lineup', 'Total Players'])   #, 'Opp Check In', 'Opp Check Out'])
+
+    pm = pd.DataFrame(columns = cols, index = range(0, len(lineups)))
+    #pm.loc[0] = [starters, 0, 0, 0, 0, 0, 0]
+    pm['Lineup'] = lineups
+    pm['Minutes'] = minutes
+    pm['Plus/Minus'] = plus_minus
+    #pm['LSU Score'] = lsu_score
+    pm['LSU Check In'] = lsu_check_in
+    pm['LSU Check Out'] = lsu_check_out
+    pm['Opp Lineups'] = opp_lineups
+    pm['Total Players'] = total_players_on_floor
+    #pm['Opp Score'] = opp_score
+    return(pm)
+
+
+
+
+
+half_1 = pd.read_csv(opp + " 1st Half.csv", header = 0, encoding='latin_1') #" Test.csv", header = 0, encoding='latin_1')
+half_2 = pd.read_csv(opp + " 2nd Half.csv", header = 0, encoding='latin_1')
+#full_game = pd.read_csv(opp + " Full Game.csv", header = 0, encoding='latin_1')
+
+
+half_1_pm = get_plus_minus(half_1, starters, opp_starters)
+half_2_pm = get_plus_minus(half_2, starters, opp_starters)
+
+pm = pd.concat((half_1_pm, half_2_pm), ignore_index = True)
+
+unique_lineups = np.unique(pm['Lineup'])
+unique_opp_lineups = np.unique(pm['Opp Lineup'])
+unique_total_players = np.unique(pm['Total Players'])
+end_cols = ['Lineup', 'Minutes', 'Plus Minus', 'Opp Lineup', 'Total Players']
+end_pm = pd.DataFrame(columns = end_cols, index = range(0, len(unique_total_players)))
+
+#end_pm['Lineup'] = unique_lineups
+#end_pm['Opp Lineup'] = unique_opp_lineups
+end_pm['Total Players'] = unique_total_players
+
+for i in range(len(end_pm['Total Players'])):
+    minutes = timedelta(seconds = 0)
+    plus_minus = 0
+    for row in pm.iterrows():
+        if row[1][6] == end_pm['Total Players'].iloc[i]:
+            minutes += timedelta(minutes = int(row[1][1][2:4]), seconds = int(row[1][1][5:]))
+            plus_minus += int(row[1][2])
+            #minutes = strftime(minutes, '%H:%S')
+    end_pm['Lineup'].iloc[i] = end_pm['Total Players'].iloc[i][:5]
+    end_pm['Opp Lineup'].iloc[i] = end_pm['Total Players'].iloc[i][5:]
+    end_pm['Total Players'].iloc[i] = ', '.join(end_pm['Total Players'].iloc[i])
+    end_pm['Lineup'].iloc[i] = ', '.join(end_pm['Lineup'].iloc[i])
+    end_pm['Opp Lineup'].iloc[i] = ', '.join(end_pm['Opp Lineup'].iloc[i])
+    end_pm['Minutes'].iloc[i] = str(minutes)[2:]
+    end_pm['Plus Minus'].iloc[i] = plus_minus
+
+end_pm = end_pm[end_pm['Minutes'] != timedelta(minutes = 0, seconds = 0)]
+end_pm = end_pm.sort_values(['Plus Minus', 'Minutes'], ascending = False)
+end_pm.to_csv(opp + ' Lineup Plus Minus.csv', columns = ['Lineup', 'Minutes', 'Plus Minus', 'Opp Lineup'], index = False)
